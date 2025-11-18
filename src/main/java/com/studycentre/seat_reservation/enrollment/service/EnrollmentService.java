@@ -2,6 +2,7 @@ package com.studycentre.seat_reservation.enrollment.service;
 
 import com.studycentre.seat_reservation.enrollment.dto.CustomerDto;
 import java.util.List;
+import java.util.Optional;
 
 public interface EnrollmentService {
   List<CustomerDto> findAll();
@@ -10,7 +11,7 @@ public interface EnrollmentService {
 
   CustomerDto upsert(CustomerDto customerDto);
 
-  CustomerDto update(CustomerDto customerDto);
+  CustomerDto update(String id, CustomerDto customerDto);
 
-  CustomerDto findById(String uuid);
+  Optional<CustomerDto> findById(String uuid);
 }

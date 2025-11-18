@@ -2,8 +2,9 @@ package com.studycentre.seat_reservation.enrollment.controller;
 
 import com.studycentre.seat_reservation.enrollment.dto.CustomerDto;
 import com.studycentre.seat_reservation.enrollment.service.EnrollmentService;
+import java.net.URI;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Autowired;
+import java.util.Optional;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,31 +14,44 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
-@RequestMapping("/students")
+@RequestMapping("/customers")
 public class EnrollmentController {
+  private final EnrollmentService enrollmentService;
 
-  @Autowired private EnrollmentService enrollmentService;
-
-  @GetMapping
-  public List<CustomerDto> getAllCustomers() {
-    return enrollmentService.findAll();
+  public EnrollmentController(EnrollmentService enrollmentService) {
+    this.enrollmentService = enrollmentService;
   }
 
   @GetMapping("/{id}")
   public ResponseEntity<CustomerDto> getCustomerById(@PathVariable String id) {
-    return ResponseEntity.ok(enrollmentService.findById(id));
+    Optional<CustomerDto> customer = enrollmentService.findById(id);
+
+    return customer.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+  }
+
+  @GetMapping
+  public ResponseEntity<List<CustomerDto>> getAllCustomers() {
+    return ResponseEntity.ok(enrollmentService.findAll());
   }
 
   @PostMapping
-  public CustomerDto saveCustomer(@RequestBody CustomerDto customerDto) {
-    return enrollmentService.upsert(customerDto);
+  public ResponseEntity<CustomerDto> saveCustomer(@RequestBody CustomerDto customerDto) {
+    CustomerDto saved = enrollmentService.upsert(customerDto);
+    URI location =
+        ServletUriComponentsBuilder.fromCurrentRequest()
+            .path("/{id}")
+            .buildAndExpand(saved.getCustomerId())
+            .toUri();
+    return ResponseEntity.created(location).body(saved);
   }
 
-  @PatchMapping
-  public CustomerDto updateCustomer(@RequestBody CustomerDto customerDto){
-    return enrollmentService.update(customerDto);
+  @PatchMapping("/{id}")
+  public ResponseEntity<CustomerDto> updateCustomer(
+      @PathVariable String id, @RequestBody CustomerDto customerDto) {
+    return ResponseEntity.ok(enrollmentService.update(id, customerDto));
   }
 
   @DeleteMapping("/{id}")

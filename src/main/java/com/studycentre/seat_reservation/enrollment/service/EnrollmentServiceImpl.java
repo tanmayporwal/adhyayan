@@ -5,23 +5,23 @@ import com.studycentre.seat_reservation.common.utility.CustomerDtoMapper;
 import com.studycentre.seat_reservation.enrollment.dto.CustomerDto;
 import com.studycentre.seat_reservation.enrollment.model.CustomerEntity;
 import com.studycentre.seat_reservation.enrollment.repository.CustomerRepository;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-
-import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
 public class EnrollmentServiceImpl implements EnrollmentService {
 
-  @Autowired private CustomerRepository customerRepository;
+  private final CustomerRepository customerRepository;
+  private final CustomerDtoMapper customerDtoMapper;
 
-  @Autowired private CustomerDtoMapper customerDtoMapper;
+  public EnrollmentServiceImpl(
+      CustomerRepository customerRepository, CustomerDtoMapper customerDtoMapper) {
+    this.customerRepository = customerRepository;
+    this.customerDtoMapper = customerDtoMapper;
+  }
 
   /**
    * Returns all the existing customer
@@ -33,18 +33,11 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     try {
       customers = customerRepository.findAll();
     } catch (Exception e) {
-      log.error(
-          "An exception occurred while fetching customers from database. Error msg: {}, stack trace: {}",
-          e.getMessage(),
-          Arrays.toString(e.getStackTrace()));
+      log.error("An exception occurred while fetching customers from database. Error: ", e);
       throw new RuntimeException("Failed to fetch from the database. Please try again");
     }
 
-    List<CustomerDto> customerdtos = new ArrayList<>();
-
-    for (CustomerEntity customer : customers) {
-      customerdtos.add(converter(customer));
-    }
+    List<CustomerDto> customerdtos = customers.stream().map(this::converter).toList();
     log.info("Getting all customers");
     return customerdtos;
   }
@@ -65,11 +58,8 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         customerRepository.deleteById(uuid);
         log.info("Customer with customer id: {} deleted successfully", uuid);
       } catch (Exception e) {
-        log.error(
-            "Failed to delete customer with id: {}, error msg: {}, stack trace: {}",
-            uuid,
-            e.getMessage(),
-            e.getStackTrace());
+        log.error("Failed to delete customer with id: {}, error: ", uuid, e);
+        throw new RuntimeException("Failed to delete the customer", e);
       }
     }
   }
@@ -81,43 +71,48 @@ public class EnrollmentServiceImpl implements EnrollmentService {
    * @return Saved {@link CustomerDto} with the generated UUID
    */
   public CustomerDto upsert(CustomerDto customerDto) {
+    if (customerDto == null) {
+      throw new IllegalArgumentException("CustomerDto cannot be null");
+    }
     CustomerEntity savedCustomer;
-    try{
+    try {
       CustomerEntity customer = converter(customerDto);
       savedCustomer = customerRepository.save(customer);
-      if(customerDto.getCustomerId() == null){
-        log.info("Customer enrolled successfully");
-      } else {
-        log.info("Customer information updated successfully");
-      }
-    } catch (Exception e){
-      log.error("Customer enrollment failed for {}, with exception: {}, stack trace: {}",
-              customerDto.getFirstName() + customerDto.getLastName(),
-              e.getMessage(),
-              e.getStackTrace());
-      throw new RuntimeException(String.format("Customer enrollment failure for %s %s", customerDto.getFirstName(), customerDto.getLastName()));
+      log.info(
+          "Customer {} successfully", customerDto.getCustomerId() == null ? "enrolled" : "updated");
+    } catch (Exception e) {
+      log.error(
+          "Customer enrollment failed for {}, with error: ",
+          customerDto.getFirstName() + customerDto.getLastName(),
+          e);
+      throw new RuntimeException(
+          String.format(
+              "Customer enrollment failure for %s %s",
+              customerDto.getFirstName(), customerDto.getLastName()));
     }
     return converter(savedCustomer);
   }
 
   /**
-   * Dummy function for now Update customer record
-   *
    * @param customerDto
    * @return Updated {@link CustomerDto}
    */
-  public CustomerDto update(CustomerDto customerDto) {
-    if(customerDto.getCustomerId() == null) {
+  public CustomerDto update(String id, CustomerDto customerDto) {
+    if (id == null) {
       log.error("Customer id not present");
       throw new RuntimeException("Customer id can not be null for update customer");
     }
 
-    CustomerDto customer = findById(customerDto.getCustomerId());
+    CustomerDto customer =
+        findById(id)
+            .orElseThrow(
+                () -> {
+                  log.error("Update information attempted for non-existing customer");
+                  return new ResourceNotFoundException(
+                      String.format(
+                          "No records of customer found for id: %s", customerDto.getCustomerId()));
+                });
 
-    if(customer == null){
-      log.error("Update information attempted for non-existing customer");
-      throw new ResourceNotFoundException(String.format("No records of customer found for id: %s", customerDto.getCustomerId()));
-    }
     customerDtoMapper.updateCustomerFromDto(customerDto, customer);
     return upsert(customer);
   }
@@ -126,30 +121,27 @@ public class EnrollmentServiceImpl implements EnrollmentService {
    * Find customer with the given Id
    *
    * @param uuid
-   * @return {@link CustomerDto} with the given id if exist or null
+   * @return {@link Optional<CustomerDto>} with the given id if exist or null
    */
-  public CustomerDto findById(String uuid) {
-    if(uuid == null || uuid.isEmpty() ){
+  public Optional<CustomerDto> findById(String uuid) {
+    if (uuid == null || uuid.isEmpty()) {
       log.error("Customer id provided is not appropriate");
       throw new RuntimeException("Customer id provided is not appropriate");
     }
-    try{
+    try {
       Optional<CustomerEntity> customer = customerRepository.findById(uuid);
-      if(customer.isEmpty()){
+      if (customer.isEmpty()) {
         log.info("No customer exist for the given id: {}", uuid);
-        return CustomerDto.builder().build();
-      } else{
-        log.info("Customer found for customer id: uuid");
-        return converter(customer.get());
+        return Optional.empty();
+      } else {
+        log.info("Customer found for customer id: {}", uuid);
+        return Optional.of(converter(customer.get()));
       }
 
     } catch (Exception e) {
-      log.error("Customer fetch failed for id: {}. error msg: {}, stack trace: {}",
-              uuid,
-              e.getMessage(),
-              e.getStackTrace());
+      log.error("Customer fetch failed for id: {}. error: ", uuid, e);
+      throw new RuntimeException("Customer fetch failed. Error: ", e);
     }
-    return CustomerDto.builder().build();
   }
 
   public CustomerDto converter(CustomerEntity customerEntity) {

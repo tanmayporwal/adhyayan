@@ -5,7 +5,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.util.Date;
+import java.time.LocalDate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -29,7 +29,7 @@ public class CustomerEntity {
   private String phoneNumber;
   private String permanentAddress;
   private String localAddress;
-  private Date dob;
+  private LocalDate dob;
   private Gender gender;
   private String emergencyContact;
   private String email;
